@@ -31,7 +31,7 @@ def process_video(video_path):
     print(f"FPS ที่ได้จาก ImagePicker: {input_fps}")
     output_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     output_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    output_path = "output_with_hand.mp4"
+    output_path = "/tmp/output_with_hand.mp4"
     if os.path.exists("output_with_hand.mp4"):
         os.remove("output_with_hand.mp4")
     out = cv2.VideoWriter(output_path, fourcc, input_fps, (output_width, output_height))

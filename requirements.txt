@@ -6,3 +6,5 @@ pandas
 scipy
 scikit-learn
 mediapipe
+gunicorn
+waitress

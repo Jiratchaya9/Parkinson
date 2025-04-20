@@ -14,9 +14,13 @@ CORS(app)
 
 SAVE_VIDEO_PATH = "uploaded_video.mp4"
 SAVE_CSV_PATH = "hand_data.csv"
-mp_hands = mp.solutions.hands
 
-def bandpass_filter(signal, lowcut=0.3, highcut=9.0, fs=60, order=4):
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+def bandpass_filter(signal, lowcut=0.3, highcut=9.0, fs=30, order=4): #เปลี่ยน fs = 30
     b, a = butter(order, [lowcut / (fs / 2), highcut / (fs / 2)], btype='band')
     return filtfilt(b, a, signal)
 
@@ -24,6 +28,13 @@ def process_video(video_path):
     print(f"เริ่มประมวลผลวิดีโอ")
     cap = cv2.VideoCapture(video_path)
     input_fps = cap.get(cv2.CAP_PROP_FPS)
+    print(f"FPS ที่ได้จาก ImagePicker: {input_fps}")
+    output_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    output_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    output_path = "output_with_hand.mp4"
+    if os.path.exists("output_with_hand.mp4"):
+        os.remove("output_with_hand.mp4")
+    out = cv2.VideoWriter(output_path, fourcc, input_fps, (output_width, output_height))
     frame_idx = 0
     data = {'Frame': [], 'Time': []}
     for i in range(21):
@@ -47,9 +58,21 @@ def process_video(video_path):
                     data[f'Landmark_{i}_X'].append(landmark.x)
                     data[f'Landmark_{i}_Y'].append(landmark.y)
                     data[f'Landmark_{i}_Z'].append(landmark.z)
+
+                mp_drawing.draw_landmarks(
+                image,
+                hand_landmarks,
+                mp_hands.HAND_CONNECTIONS,
+                mp_drawing_styles.get_default_hand_landmarks_style(),
+                mp_drawing_styles.get_default_hand_connections_style())
+
+            out.write(cv2.cvtColor(image,cv2.COLOR_RGB2BGR))
+
             frame_idx += 1
 
+
     cap.release()
+    out.release()
     df = pd.DataFrame(data)
     df.to_csv(SAVE_CSV_PATH, index=False)
 
@@ -83,7 +106,7 @@ def process_video(video_path):
 
     f_pc1, t_pc1, Zxx_pc1 = stft(pc1, fs=input_fps, nperseg=512, noverlap=384)
     magnitude_spectrum = np.abs(Zxx_pc1)
-    valid_freq_idx = (f_pc1 >= 0.1) & (f_pc1 <= 9.8)
+    valid_freq_idx = (f_pc1 >= 0.1) & (f_pc1 <= 9.0)
     filtered_magnitude = magnitude_spectrum[valid_freq_idx, :]
 
     if np.all(filtered_magnitude == 0):
@@ -94,7 +117,6 @@ def process_video(video_path):
         print(f"เสร็จสิ้นความถี่ = {freq:.2f} Hz")
         return freq
     
-
 latest_result = None
 
 @app.route('/upload', methods=['POST'])
@@ -115,7 +137,7 @@ def upload():
     freq = process_video(SAVE_VIDEO_PATH)
     end = time.time()
 
-    os.remove(SAVE_VIDEO_PATH)
+    #os.remove(SAVE_VIDEO_PATH) #ลบวิดีโอออกเมื่อประมวลผลเเสร็จ
 
     risk = "ปกติ"
     if 4 <= freq <= 6:

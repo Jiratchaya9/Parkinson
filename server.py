@@ -8,22 +8,17 @@ import time
 from scipy.signal import butter, filtfilt, stft
 from sklearn.decomposition import PCA
 import os
-
 app = Flask(__name__)
 CORS(app)
-
 SAVE_VIDEO_PATH = "uploaded_video.mp4"
 SAVE_CSV_PATH = "hand_data.csv"
-
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
 def bandpass_filter(signal, lowcut=0.3, highcut=9.0, fs=30, order=4): #เปลี่ยน fs = 30
     b, a = butter(order, [lowcut / (fs / 2), highcut / (fs / 2)], btype='band')
     return filtfilt(b, a, signal)
-
 def process_video(video_path):
     print(f"เริ่มประมวลผลวิดีโอ")
     cap = cv2.VideoCapture(video_path)
@@ -65,12 +60,8 @@ def process_video(video_path):
                 mp_hands.HAND_CONNECTIONS,
                 mp_drawing_styles.get_default_hand_landmarks_style(),
                 mp_drawing_styles.get_default_hand_connections_style())
-
             out.write(cv2.cvtColor(image,cv2.COLOR_RGB2BGR))
-
             frame_idx += 1
-
-
     cap.release()
     out.release()
     df = pd.DataFrame(data)
@@ -99,11 +90,9 @@ def process_video(video_path):
         landmark_y.mean(axis=1),
         landmark_z.mean(axis=1)
     ]).T
-
     pca = PCA(n_components=3)
     principal_components = pca.fit_transform(data_matrix)
     pc1 = bandpass_filter(principal_components[:, 0], fs=input_fps)
-
     f_pc1, t_pc1, Zxx_pc1 = stft(pc1, fs=input_fps, nperseg=512, noverlap=384)
     magnitude_spectrum = np.abs(Zxx_pc1)
     valid_freq_idx = (f_pc1 >= 0.1) & (f_pc1 <= 9.0)
@@ -116,9 +105,7 @@ def process_video(video_path):
         freq = f_pc1[valid_freq_idx][global_max_index[0]]
         print(f"เสร็จสิ้นความถี่ = {freq:.2f} Hz")
         return freq
-    
 latest_result = None
-
 @app.route('/upload', methods=['POST'])
 def upload():
     global latest_result
@@ -128,17 +115,13 @@ def upload():
     if 'video' not in request.files:
         print("ไม่มีวิดีโอที่ถูกอัปโหลด")
         return jsonify({"error": "No video uploaded"}), 400
-
     video = request.files['video']
     video.save(SAVE_VIDEO_PATH)
     print(f"วิดีโอถูกบันทึก:", SAVE_VIDEO_PATH)
-
     start = time.time()
     freq = process_video(SAVE_VIDEO_PATH)
     end = time.time()
-
     #os.remove(SAVE_VIDEO_PATH) #ลบวิดีโอออกเมื่อประมวลผลเเสร็จ
-
     risk = "ปกติ"
     if 4 <= freq <= 6:
         risk = "เสี่ยงสูง"

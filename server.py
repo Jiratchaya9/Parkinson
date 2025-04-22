@@ -8,17 +8,23 @@ import time
 from scipy.signal import butter, filtfilt, stft
 from sklearn.decomposition import PCA
 import os
+import matplotlib.pyplot as plt 
+
 app = Flask(__name__)
 CORS(app)
+
 SAVE_VIDEO_PATH = "uploaded_video.mp4"
 SAVE_CSV_PATH = "hand_data.csv"
+
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
 def bandpass_filter(signal, lowcut=0.3, highcut=9.0, fs=30, order=4): #เปลี่ยน fs = 30
     b, a = butter(order, [lowcut / (fs / 2), highcut / (fs / 2)], btype='band')
     return filtfilt(b, a, signal)
+
 def process_video(video_path):
     print(f"เริ่มประมวลผลวิดีโอ")
     cap = cv2.VideoCapture(video_path)
@@ -60,8 +66,12 @@ def process_video(video_path):
                 mp_hands.HAND_CONNECTIONS,
                 mp_drawing_styles.get_default_hand_landmarks_style(),
                 mp_drawing_styles.get_default_hand_connections_style())
+
             out.write(cv2.cvtColor(image,cv2.COLOR_RGB2BGR))
+
             frame_idx += 1
+
+
     cap.release()
     out.release()
     df = pd.DataFrame(data)
@@ -90,9 +100,11 @@ def process_video(video_path):
         landmark_y.mean(axis=1),
         landmark_z.mean(axis=1)
     ]).T
+
     pca = PCA(n_components=3)
     principal_components = pca.fit_transform(data_matrix)
     pc1 = bandpass_filter(principal_components[:, 0], fs=input_fps)
+
     f_pc1, t_pc1, Zxx_pc1 = stft(pc1, fs=input_fps, nperseg=512, noverlap=384)
     magnitude_spectrum = np.abs(Zxx_pc1)
     valid_freq_idx = (f_pc1 >= 0.1) & (f_pc1 <= 9.0)
@@ -105,39 +117,49 @@ def process_video(video_path):
         freq = f_pc1[valid_freq_idx][global_max_index[0]]
         print(f"เสร็จสิ้นความถี่ = {freq:.2f} Hz")
         return freq
-latest_result = {}
+    
+    
+latest_result = None 
+
+
 @app.route('/upload', methods=['POST'])
 def upload():
-    session_id = str(uuid.uuid4())
-    print(f"วิดีโอถูกส่งเข้ามาแล้ว")
+    global latest_result
+
+    print("วิดีโอถูกส่งเข้ามาแล้ว")
+    latest_result = None
     if 'video' not in request.files:
         print("ไม่มีวิดีโอที่ถูกอัปโหลด")
         return jsonify({"error": "No video uploaded"}), 400
+
     video = request.files['video']
     video.save(SAVE_VIDEO_PATH)
     print(f"วิดีโอถูกบันทึก:", SAVE_VIDEO_PATH)
+
     start = time.time()
     freq = process_video(SAVE_VIDEO_PATH)
     end = time.time()
+
     #os.remove(SAVE_VIDEO_PATH) #ลบวิดีโอออกเมื่อประมวลผลเเสร็จ
+
     risk = "ปกติ"
     if 4 <= freq <= 6:
         risk = "เสี่ยงสูง"
     elif 3 <= freq < 4 or 6 < freq <= 7:
         risk = "เสี่ยงปานกลาง"
 
-    latest_result[session_id] = {
+    latest_result = {
         "max_frequency": round(freq, 2),
         "risk": risk,
         "processing_time": round(end - start, 2)
     }
-    return jsonify({"session_id": session_id, "status": "Processing started"})
+    return jsonify(latest_result)
 
-@app.route('/status/<session_id>', methods=['GET'])
-def check_status(session_id):
-    if session_id in latest_result:
-        return jsonify({"processed": True, "result": latest_result[session_id]})
-    return jsonify({"processed": False}),404
+@app.route('/status', methods=['GET'])
+def check_status():
+    if latest_result:
+        return jsonify({"processed": True, "result": latest_result})
+    return jsonify({"processed": False})
 
 @app.route('/results', methods=['GET'])
 def get_results():

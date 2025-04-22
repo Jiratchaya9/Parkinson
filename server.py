@@ -109,7 +109,7 @@ latest_result = {}
 @app.route('/upload', methods=['POST'])
 def upload():
     session_id = str(uuid.uuid4())
-    print("วิดีโอถูกส่งเข้ามาแล้ว")
+    print(f"วิดีโอถูกส่งเข้ามาแล้ว")
     if 'video' not in request.files:
         print("ไม่มีวิดีโอที่ถูกอัปโหลด")
         return jsonify({"error": "No video uploaded"}), 400
@@ -133,7 +133,7 @@ def upload():
     }
     return jsonify({"session_id": session_id, "status": "Processing started"})
 
-@app.route('/status/<session_id', methods=['GET'])
+@app.route('/status/<session_id>', methods=['GET'])
 def check_status(session_id):
     if session_id in latest_result:
         return jsonify({"processed": True, "result": latest_result[session_id]})

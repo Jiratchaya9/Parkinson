@@ -105,13 +105,11 @@ def process_video(video_path):
         freq = f_pc1[valid_freq_idx][global_max_index[0]]
         print(f"เสร็จสิ้นความถี่ = {freq:.2f} Hz")
         return freq
-latest_result = None
+latest_result = {}
 @app.route('/upload', methods=['POST'])
 def upload():
-    global latest_result
-
+    session_id = str(uuid.uuid4())
     print("วิดีโอถูกส่งเข้ามาแล้ว")
-    latest_result = None
     if 'video' not in request.files:
         print("ไม่มีวิดีโอที่ถูกอัปโหลด")
         return jsonify({"error": "No video uploaded"}), 400
@@ -128,18 +126,18 @@ def upload():
     elif 3 <= freq < 4 or 6 < freq <= 7:
         risk = "เสี่ยงปานกลาง"
 
-    latest_result = {
+    latest_result[session_id] = {
         "max_frequency": round(freq, 2),
         "risk": risk,
         "processing_time": round(end - start, 2)
     }
-    return jsonify(latest_result)
+    return jsonify({"session_id": session_id, "status": "Processing started"})
 
-@app.route('/status', methods=['GET'])
-def check_status():
-    if latest_result:
-        return jsonify({"processed": True, "result": latest_result})
-    return jsonify({"processed": False})
+@app.route('/status/<session_id', methods=['GET'])
+def check_status(session_id):
+    if session_id in latest_result:
+        return jsonify({"processed": True, "result": latest_result[session_id]})
+    return jsonify({"processed": False}),404
 
 @app.route('/results', methods=['GET'])
 def get_results():
